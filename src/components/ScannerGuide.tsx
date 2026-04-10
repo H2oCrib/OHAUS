@@ -85,13 +85,16 @@ export function ScannerGuide({ onContinue, onBack }: ScannerGuideProps) {
             <span className="text-xs font-bold text-green-400">3</span>
           </div>
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-gray-100 mb-1">Open App on C72</h3>
+            <h3 className="text-sm font-semibold text-gray-100 mb-1">Open Scanner Portal on C72</h3>
             <p className="text-xs sm:text-sm text-gray-500 leading-relaxed mb-2">
               Open <span className="text-gray-300">Chrome</span> on the C72 and navigate to:
             </p>
             <div className="bg-base-800 border border-base-600 rounded-lg px-3 py-2.5 font-mono text-sm text-green-400 select-all break-all">
-              {appURL}
+              {appURL}/#/scanner
             </div>
+            <p className="text-[10px] sm:text-xs text-gray-600 mt-1.5">
+              This opens a dedicated scanner page. Scanned tags are sent to this Mac automatically.
+            </p>
             {!networkIP && (
               <p className="text-[10px] sm:text-xs text-amber-500/80 mt-2">
                 To find your Mac's IP: open Terminal and run <span className="font-mono bg-base-800 px-1 py-0.5 rounded text-amber-400">ipconfig getifaddr en0</span>
@@ -110,7 +113,7 @@ export function ScannerGuide({ onContinue, onBack }: ScannerGuideProps) {
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-gray-100 mb-1">Configure KeyboardEmulator</h3>
             <p className="text-xs sm:text-sm text-gray-500 leading-relaxed mb-2">
-              On the C72, open the <span className="text-gray-300">KeyboardEmulator</span> app (pre-installed):
+              On the C72, open the <span className="text-gray-300">KeyboardEmulator</span> app (pre-installed) and configure it so scans output as keyboard input:
             </p>
             <ul className="text-xs sm:text-sm text-gray-500 space-y-1.5 ml-1">
               <li className="flex items-start gap-2">
@@ -130,6 +133,9 @@ export function ScannerGuide({ onContinue, onBack }: ScannerGuideProps) {
                 <span>Enable <span className="text-gray-300">Add Enter suffix</span> (auto-submits after scan)</span>
               </li>
             </ul>
+            <p className="text-[10px] sm:text-xs text-gray-600 mt-2">
+              Then switch back to Chrome. The scanner portal input field will catch scans and send them to this Mac.
+            </p>
           </div>
         </div>
       </div>

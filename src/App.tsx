@@ -6,6 +6,7 @@ import { SessionSetup } from './components/SessionSetup';
 import { WeighingStation } from './components/WeighingStation';
 import { VerificationSummary } from './components/VerificationSummary';
 import { ScannerGuide } from './components/ScannerGuide';
+import { ScannerPortal } from './components/ScannerPortal';
 import { WetSetup } from './components/WetSetup';
 import { WetWeighingStation } from './components/WetWeighingStation';
 import { WetSummary } from './components/WetSummary';
@@ -17,6 +18,18 @@ import type {
 } from './lib/types';
 
 function App() {
+  // Check if this is the scanner portal route
+  const isScannerPortal = window.location.hash === '#/scanner';
+
+  if (isScannerPortal) {
+    const wsUrl = `ws://${window.location.host}/ws/scanner`;
+    return <ScannerPortal wsUrl={wsUrl} />;
+  }
+
+  return <MainApp />;
+}
+
+function MainApp() {
   const scale = useScale();
   const [phase, setPhase] = useState<AppPhase>('connect');
   const [workflowMode, setWorkflowMode] = useState<WorkflowMode | null>(null);

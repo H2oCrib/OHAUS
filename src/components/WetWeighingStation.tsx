@@ -3,6 +3,7 @@ import type { ScaleReading, HarvestSession, WetWeightReading } from '../lib/type
 import { GRAMS_PER_LB } from '../lib/types';
 import { useAutoCapture } from '../hooks/useAutoCapture';
 import { useAudio } from '../hooks/useAudio';
+import { useScannerRelay } from '../hooks/useScannerRelay';
 
 interface WetWeighingStationProps {
   session: HarvestSession;
@@ -39,6 +40,27 @@ export function WetWeighingStation({
   const [showControls, setShowControls] = useState(false);
   const scanInputRef = useRef<HTMLInputElement>(null);
   const { playCapture, playComplete, playError } = useAudio();
+
+  // Scanner relay — receives tags from C72 via WebSocket
+  const handleRelayTag = useCallback((tagId: string) => {
+    // Same logic as handleTagSubmit but triggered remotely
+    const isDuplicate = session.readings.some(r => r.tagId === tagId);
+    if (isDuplicate) {
+      setDuplicateAlert(tagId);
+      playError();
+      setTimeout(() => setDuplicateAlert(null), 3000);
+      return;
+    }
+    setScannedTag(tagId);
+    setTagInput('');
+    setAwaitingWeight(true);
+    setDuplicateAlert(null);
+  }, [session.readings, playError]);
+
+  const { connected: scannerRelayConnected } = useScannerRelay({
+    enabled: true,
+    onTagReceived: handleRelayTag,
+  });
 
   const totalPlants = session.config.strains.reduce((sum, s) => sum + s.plantCount, 0);
   const nextPlant = session.readings.length + 1;
@@ -193,10 +215,19 @@ export function WetWeighingStation({
           <div className="flex items-center gap-2 mb-0.5">
             <h2 className="text-lg sm:text-2xl font-semibold text-gray-50 truncate">{session.config.batchName}</h2>
           </div>
-          <p className="text-xs text-gray-500 font-mono">
-            Plant {Math.min(nextPlant, totalPlants)} of {totalPlants}
-            {!singleStrain && <> &middot; {session.config.strains.length} strains</>}
-          </p>
+          <div className="flex items-center gap-2 text-xs text-gray-500 font-mono">
+            <span>Plant {Math.min(nextPlant, totalPlants)} of {totalPlants}</span>
+            {!singleStrain && <><span>&middot;</span><span>{session.config.strains.length} strains</span></>}
+            {scannerRelayConnected && (
+              <>
+                <span>&middot;</span>
+                <span className="flex items-center gap-1 text-green-500">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                  C72
+                </span>
+              </>
+            )}
+          </div>
         </div>
         <div className="flex gap-1.5 sm:gap-2 shrink-0">
           <button

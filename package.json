@@ -9,11 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@types/ws": "^8.18.1",
     "ag-grid-community": "^33.0.0",
     "ag-grid-react": "^33.0.0",
     "exceljs": "^4.4.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",
