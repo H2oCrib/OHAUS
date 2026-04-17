@@ -13,11 +13,22 @@ import { WetSummary } from './components/WetSummary';
 import { UserGuide } from './components/UserGuide';
 import { exportExcel } from './lib/export';
 import { exportWetExcel } from './lib/wet-export';
-import { loadSession, clearSession, createDebouncedSave } from './lib/session-persistence';
+import { loadSession, clearSession, createDebouncedSave, peekSession } from './lib/session-persistence';
 import type {
   AppPhase, ScaleReading, StrainConfig, StrainSession, WeightReading,
   WorkflowMode, HarvestBatchConfig, HarvestSession, WetWeightReading,
 } from './lib/types';
+
+export function formatTimeAgo(date: Date): string {
+  const sec = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+  if (sec < 5) return 'just now';
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  return `${Math.floor(hr / 24)}d ago`;
+}
 
 function App() {
   // Check if this is the scanner portal route
@@ -51,6 +62,8 @@ function MainApp() {
 
   const [sessionRestored, setSessionRestored] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [pendingResume, setPendingResume] = useState<ReturnType<typeof peekSession>>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
   // Global ? shortcut to open guide
   useEffect(() => {
@@ -64,10 +77,20 @@ function MainApp() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  const debouncedSave = useMemo(() => createDebouncedSave(300), []);
+  const debouncedSave = useMemo(
+    () => createDebouncedSave(300, at => setLastSavedAt(at)),
+    [],
+  );
 
-  // Restore saved session on mount
+  // Peek at saved session on mount — show resume card instead of auto-restoring
   useEffect(() => {
+    const meta = peekSession();
+    if (meta && meta.recorded > 0 && meta.recorded < meta.total) {
+      setPendingResume(meta);
+    }
+  }, []);
+
+  const handleResumeSession = () => {
     const saved = loadSession();
     if (saved) {
       setHarvestSession(saved.harvestSession);
@@ -77,7 +100,13 @@ function MainApp() {
       setSessionRestored(true);
       setTimeout(() => setSessionRestored(false), 4000);
     }
-  }, []);
+    setPendingResume(null);
+  };
+
+  const handleDiscardResume = () => {
+    clearSession();
+    setPendingResume(null);
+  };
 
   // Auto-save whenever harvestSession changes
   useEffect(() => {
@@ -326,6 +355,39 @@ function MainApp() {
         </div>
       )}
 
+      {/* Resume Pending Session Card */}
+      {pendingResume && (phase === 'connect' || phase === 'modeSelect') && (
+        <div className="bg-green-500/5 border-b border-green-500/20 px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
+            <span className="text-xs text-gray-300 truncate">
+              <span className="text-gray-500">Resume:</span>{' '}
+              <span className="font-medium">{pendingResume.batchName}</span>{' '}
+              <span className="text-gray-500 font-mono">
+                {pendingResume.recorded}/{pendingResume.total}
+              </span>
+              <span className="text-gray-600 ml-2">
+                saved {formatTimeAgo(new Date(pendingResume.savedAt))}
+              </span>
+            </span>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button
+              onClick={handleResumeSession}
+              className="px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-xs font-medium rounded transition-colors"
+            >
+              Resume
+            </button>
+            <button
+              onClick={handleDiscardResume}
+              className="px-3 py-1 bg-base-800 hover:bg-base-700 border border-base-600 text-gray-400 text-xs rounded transition-colors"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
       <main className="flex-1">
         {phase === 'connect' && (
@@ -397,6 +459,7 @@ function MainApp() {
             onStopContinuous={demoMode ? async () => {} : scale.stopContinuous}
             workflowMode={workflowMode ?? 'wet'}
             phase={phase}
+            lastSavedAt={lastSavedAt}
           />
         )}
 

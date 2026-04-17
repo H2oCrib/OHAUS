@@ -16,6 +16,9 @@ export function WetSetup({ onStartWeighing, onLoadSession, onBack }: WetSetupPro
   const [strainName, setStrainName] = useState('');
   const [plantCount, setPlantCount] = useState('');
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+  const [bulkError, setBulkError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleLoadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -54,6 +57,34 @@ export function WetSetup({ onStartWeighing, onLoadSession, onBack }: WetSetupPro
 
   const handleRemoveStrain = (id: string) => {
     setStrains(prev => prev.filter(s => s.id !== id));
+  };
+
+  const handleBulkAdd = () => {
+    setBulkError(null);
+    const lines = bulkText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length === 0) { setBulkError('Paste one strain per line'); return; }
+    const parsed: HarvestStrainConfig[] = [];
+    const errors: string[] = [];
+    for (const [i, line] of lines.entries()) {
+      // Accept: "NAME 117", "NAME,117", "NAME\t117", "117 NAME", "NAME 117 plants"
+      // Strategy: find first integer in the line, everything else is the name
+      const numMatch = line.match(/\b(\d+)\b/);
+      if (!numMatch) { errors.push(`Line ${i + 1}: no count`); continue; }
+      const count = parseInt(numMatch[1], 10);
+      if (count <= 0) { errors.push(`Line ${i + 1}: count must be > 0`); continue; }
+      const name = line
+        .replace(numMatch[0], '')
+        .replace(/[,\t]+/g, ' ')
+        .replace(/\bplants?\b/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!name) { errors.push(`Line ${i + 1}: no strain name`); continue; }
+      parsed.push({ id: crypto.randomUUID(), strain: name, plantCount: count });
+    }
+    if (errors.length) { setBulkError(errors.slice(0, 3).join(' · ')); return; }
+    setStrains(prev => [...prev, ...parsed]);
+    setBulkText('');
+    setBulkOpen(false);
   };
 
   const handleStart = () => {
@@ -156,6 +187,53 @@ export function WetSetup({ onStartWeighing, onLoadSession, onBack }: WetSetupPro
           </button>
         </div>
       )}
+
+      {/* Bulk Paste */}
+      <div className="mb-3 sm:mb-4 bg-base-900 border border-base-700 rounded-lg">
+        <button
+          type="button"
+          onClick={() => setBulkOpen(v => !v)}
+          className="w-full flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3 text-left"
+          aria-expanded={bulkOpen}
+        >
+          <div>
+            <p className="text-xs font-medium text-gray-300">Paste Strain List</p>
+            <p className="text-[10px] text-gray-600 mt-0.5">Bulk add from a harvest sheet — one strain per line</p>
+          </div>
+          <span className="text-gray-500 text-xs">{bulkOpen ? '▲' : '▼'}</span>
+        </button>
+        {bulkOpen && (
+          <div className="px-3 sm:px-5 pb-3 sm:pb-4 border-t border-base-700">
+            <textarea
+              value={bulkText}
+              onChange={e => setBulkText(e.target.value)}
+              placeholder={'CHERRIEZ 117\nRAINBOW RUNTZ 63\nBLUE NERDZ 144\n...'}
+              rows={6}
+              className="w-full mt-3 px-3 py-2 bg-base-800 border border-base-600 rounded text-gray-100 placeholder-gray-600 focus:outline-none focus:border-green-500/50 font-mono text-xs sm:text-sm"
+            />
+            <p className="text-[10px] text-gray-600 mt-1">
+              Accepts: <span className="font-mono">NAME 117</span>, <span className="font-mono">NAME, 117</span>, <span className="font-mono">NAME 117 plants</span>
+            </p>
+            {bulkError && <p className="text-[10px] text-red-400 mt-1">{bulkError}</p>}
+            <div className="flex gap-2 mt-3">
+              <button
+                type="button"
+                onClick={handleBulkAdd}
+                className="flex-1 py-2 bg-green-600 hover:bg-green-500 text-white text-xs font-medium rounded transition-colors"
+              >
+                Add All
+              </button>
+              <button
+                type="button"
+                onClick={() => { setBulkText(''); setBulkError(null); setBulkOpen(false); }}
+                className="px-4 py-2 bg-base-800 hover:bg-base-700 border border-base-600 text-gray-400 text-xs rounded transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Add Strain Form */}
       <form onSubmit={handleAddStrain} className="bg-base-900 border border-base-700 rounded-lg p-3 sm:p-5 space-y-3 sm:space-y-4">

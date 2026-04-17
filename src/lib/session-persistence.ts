@@ -86,6 +86,38 @@ export function loadSession(): {
   }
 }
 
+/** Peek at saved session metadata without applying it. Returns null if none. */
+export function peekSession(): {
+  batchName: string;
+  recorded: number;
+  total: number;
+  savedAt: string;
+  workflowMode: WorkflowMode;
+  phase: AppPhase;
+} | null {
+  try {
+    let raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (legacy) raw = legacy;
+    }
+    if (!raw) return null;
+    const state = JSON.parse(raw) as SavedState;
+    if (!state.harvestSession || !state.workflowMode || !state.phase) return null;
+    const total = state.harvestSession.config.strains.reduce((s, x) => s + x.plantCount, 0);
+    return {
+      batchName: state.harvestSession.config.batchName,
+      recorded: state.harvestSession.readings.length,
+      total,
+      savedAt: state.savedAt,
+      workflowMode: state.workflowMode,
+      phase: state.phase,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Clear saved session from localStorage. */
 export function clearSession(): void {
   try {
@@ -148,8 +180,9 @@ export function parseSessionFile(json: string): {
   }
 }
 
-/** Debounced save — call frequently, writes at most every `ms` milliseconds. */
-export function createDebouncedSave(ms = 300) {
+/** Debounced save — call frequently, writes at most every `ms` milliseconds.
+ *  `onSaved` fires with the timestamp after each actual write. */
+export function createDebouncedSave(ms = 300, onSaved?: (at: Date) => void) {
   let timer: ReturnType<typeof setTimeout> | null = null;
   return (
     harvestSession: HarvestSession,
@@ -157,6 +190,9 @@ export function createDebouncedSave(ms = 300) {
     phase: AppPhase,
   ) => {
     if (timer) clearTimeout(timer);
-    timer = setTimeout(() => saveSession(harvestSession, workflowMode, phase), ms);
+    timer = setTimeout(() => {
+      saveSession(harvestSession, workflowMode, phase);
+      onSaved?.(new Date());
+    }, ms);
   };
 }

@@ -6,6 +6,7 @@ import { useAudio } from '../hooks/useAudio';
 import { useScannerRelay } from '../hooks/useScannerRelay';
 import { useUSBScanner } from '../hooks/useUSBScanner';
 import { exportSessionFile } from '../lib/session-persistence';
+import { formatTimeAgo } from '../App';
 
 interface WetWeighingStationProps {
   session: HarvestSession;
@@ -19,6 +20,7 @@ interface WetWeighingStationProps {
   onStopContinuous: () => void;
   workflowMode: 'dry' | 'wet';
   phase: string;
+  lastSavedAt?: Date | null;
 }
 
 export function WetWeighingStation({
@@ -33,6 +35,7 @@ export function WetWeighingStation({
   onStopContinuous,
   workflowMode,
   phase,
+  lastSavedAt,
 }: WetWeighingStationProps) {
   const [autoCapture, setAutoCapture] = useState(true);
   const [continuousActive, setContinuousActive] = useState(false);
@@ -45,6 +48,15 @@ export function WetWeighingStation({
   const [showControls, setShowControls] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<{ tagId: string; strain: string; weightGrams: string }>({ tagId: '', strain: '', weightGrams: '' });
+  const [confirmFinish, setConfirmFinish] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [, setTimeTick] = useState(0);
+
+  // Tick every 15s to refresh "saved Xs ago" / ETA labels
+  useEffect(() => {
+    const id = setInterval(() => setTimeTick(t => t + 1), 15_000);
+    return () => clearInterval(id);
+  }, []);
 
   const startEditing = (r: WetWeightReading) => {
     setEditingId(r.id);
@@ -150,6 +162,32 @@ export function WetWeighingStation({
   // Running totals
   const runningTotalGrams = session.readings.reduce((sum, r) => sum + r.weightGrams, 0);
   const runningTotalLbs = runningTotalGrams / GRAMS_PER_LB;
+
+  // Pace / ETA — use last 30 readings as rolling window so early-session spikes don't skew
+  let paceLabel = '—';
+  let etaLabel = '—';
+  if (session.readings.length >= 2) {
+    const window = session.readings.slice(-30);
+    const first = new Date(window[0].timestamp).getTime();
+    const last = new Date(window[window.length - 1].timestamp).getTime();
+    const spanMin = Math.max((last - first) / 60000, 0.01);
+    const perMin = (window.length - 1) / spanMin;
+    const perHr = perMin * 60;
+    paceLabel = perHr >= 10 ? `${perHr.toFixed(0)}/hr` : `${perHr.toFixed(1)}/hr`;
+    const remaining = totalPlants - session.readings.length;
+    if (remaining > 0 && perMin > 0) {
+      const etaMin = remaining / perMin;
+      if (etaMin < 1) etaLabel = '<1m';
+      else if (etaMin < 60) etaLabel = `${Math.round(etaMin)}m`;
+      else {
+        const h = Math.floor(etaMin / 60);
+        const m = Math.round(etaMin % 60);
+        etaLabel = `${h}h${m ? ` ${m}m` : ''}`;
+      }
+    } else if (remaining === 0) {
+      etaLabel = 'done';
+    }
+  }
 
   // Auto-select first strain with remaining plants
   useEffect(() => {
@@ -296,9 +334,19 @@ export function WetWeighingStation({
           <div className="flex items-center gap-2 mb-0.5">
             <h2 className="text-lg sm:text-2xl font-semibold text-gray-50 truncate">{session.config.batchName}</h2>
           </div>
-          <div className="flex items-center gap-2 text-xs text-gray-500 font-mono">
+          <div className="flex items-center gap-2 text-xs text-gray-500 font-mono flex-wrap">
             <span>Plant {Math.min(nextPlant, totalPlants)} of {totalPlants}</span>
             {!singleStrain && <><span>&middot;</span><span>{session.config.strains.length} strains</span></>}
+            {session.readings.length >= 2 && (
+              <>
+                <span>&middot;</span>
+                <span title="Recent pace">{paceLabel}</span>
+                <span>&middot;</span>
+                <span title="Estimated time remaining" className={etaLabel === 'done' ? 'text-green-400' : ''}>
+                  ETA {etaLabel}
+                </span>
+              </>
+            )}
             <span>&middot;</span>
             <span className={`flex items-center gap-1 ${currentReading ? 'text-green-500' : 'text-gray-600'}`}>
               <span className={`w-1.5 h-1.5 rounded-full inline-block ${currentReading ? 'bg-green-500' : 'bg-gray-600'}`} />
@@ -308,6 +356,14 @@ export function WetWeighingStation({
               <span className={`w-1.5 h-1.5 rounded-full inline-block ${usbScannerConnected ? 'bg-green-500' : 'bg-gray-600'}`} />
               Scanner
             </span>
+            {lastSavedAt && (
+              <>
+                <span>&middot;</span>
+                <span className="text-gray-600" title={`Last auto-save: ${lastSavedAt.toLocaleTimeString()}`}>
+                  Saved {formatTimeAgo(lastSavedAt)}
+                </span>
+              </>
+            )}
           </div>
         </div>
         <div className="flex gap-1.5 sm:gap-2 shrink-0">
@@ -611,10 +667,31 @@ export function WetWeighingStation({
         )}
       </div>
 
+      {/* Shortcuts hint strip */}
+      <div className="mt-3 sm:mt-4">
+        <button
+          onClick={() => setShowShortcuts(v => !v)}
+          className="w-full flex items-center justify-between px-3 py-1.5 bg-base-900 hover:bg-base-800 border border-base-700 rounded text-[10px] sm:text-xs text-gray-500 transition-colors"
+          aria-expanded={showShortcuts}
+        >
+          <span className="uppercase tracking-widest">Keyboard Shortcuts</span>
+          <span>{showShortcuts ? '▲' : '▼'}</span>
+        </button>
+        {showShortcuts && (
+          <div className="mt-1 px-3 py-2 bg-base-900/60 border border-base-700/60 rounded text-[10px] sm:text-xs text-gray-500 grid grid-cols-2 sm:grid-cols-5 gap-y-1 gap-x-3 font-mono">
+            <span><kbd className="px-1 py-0.5 bg-base-800 border border-base-600 rounded text-gray-400">Space</kbd> / <kbd className="px-1 py-0.5 bg-base-800 border border-base-600 rounded text-gray-400">Enter</kbd> record</span>
+            <span><kbd className="px-1 py-0.5 bg-base-800 border border-base-600 rounded text-gray-400">Z</kbd> undo last</span>
+            <span><kbd className="px-1 py-0.5 bg-base-800 border border-base-600 rounded text-gray-400">T</kbd> tare</span>
+            <span><kbd className="px-1 py-0.5 bg-base-800 border border-base-600 rounded text-gray-400">Esc</kbd> cancel tag</span>
+            <span><kbd className="px-1 py-0.5 bg-base-800 border border-base-600 rounded text-gray-400">?</kbd> user guide</span>
+          </div>
+        )}
+      </div>
+
       {/* Finish Button */}
       <div className="mt-2 sm:mt-4">
         <button
-          onClick={onFinish}
+          onClick={() => setConfirmFinish(true)}
           className={`w-full py-3 font-medium rounded-lg transition-colors border text-sm ${
             allDone
               ? 'bg-green-600 hover:bg-green-500 text-white border-green-500/30'
@@ -624,6 +701,62 @@ export function WetWeighingStation({
           Finish Harvest {!allDone && `(${session.readings.length}/${totalPlants})`}
         </button>
       </div>
+
+      {/* Finish Confirmation Modal */}
+      {confirmFinish && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+          onClick={() => setConfirmFinish(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="bg-base-900 border border-base-700 rounded-lg p-5 sm:p-6 max-w-sm w-full"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-base sm:text-lg font-semibold text-gray-100 mb-1">
+              Finish harvest?
+            </h3>
+            <p className="text-xs sm:text-sm text-gray-500 mb-4">
+              {allDone
+                ? 'All plants weighed. This will lock the session and open the summary.'
+                : `Only ${session.readings.length} of ${totalPlants} plants recorded. You can still come back if you finish early.`}
+            </p>
+            <div className="bg-base-800 border border-base-700 rounded p-3 mb-4 grid grid-cols-3 gap-2 text-center">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-gray-600">Plants</p>
+                <p className="text-sm font-mono text-gray-200">{session.readings.length}/{totalPlants}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-gray-600">Total</p>
+                <p className="text-sm font-mono text-gray-200">{runningTotalGrams.toFixed(0)}g</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-gray-600">Lbs</p>
+                <p className="text-sm font-mono text-gray-200">{runningTotalLbs.toFixed(2)}</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmFinish(false)}
+                className="flex-1 py-2.5 bg-base-800 hover:bg-base-700 border border-base-600 text-gray-300 text-sm rounded transition-colors"
+              >
+                Keep Weighing
+              </button>
+              <button
+                onClick={() => { setConfirmFinish(false); onFinish(); }}
+                className={`flex-1 py-2.5 text-sm font-medium rounded transition-colors border ${
+                  allDone
+                    ? 'bg-green-600 hover:bg-green-500 text-white border-green-500/30'
+                    : 'bg-amber-600 hover:bg-amber-500 text-white border-amber-500/30'
+                }`}
+              >
+                {allDone ? 'Finish' : 'Finish Anyway'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
