@@ -37,6 +37,14 @@
   }
 }
 
+/* Capture flash — full-screen green (success) / red (duplicate) */
+@keyframes flash {
+  0%   { opacity: 0; }
+  15%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+.animate-flash { animation: flash 300ms ease-out forwards; }
+
 /* AG Grid theme */
 .ag-theme-alpine-dark {
   --ag-background-color: #131D33;

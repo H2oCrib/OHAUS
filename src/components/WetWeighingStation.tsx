@@ -51,6 +51,16 @@ export function WetWeighingStation({
   const [confirmFinish, setConfirmFinish] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [, setTimeTick] = useState(0);
+  const [flash, setFlash] = useState<'success' | 'error' | null>(null);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const triggerFlash = useCallback((kind: 'success' | 'error') => {
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    setFlash(kind);
+    flashTimerRef.current = setTimeout(() => setFlash(null), kind === 'error' ? 450 : 300);
+  }, []);
+
+  useEffect(() => () => { if (flashTimerRef.current) clearTimeout(flashTimerRef.current); }, []);
 
   // Tick every 15s to refresh "saved Xs ago" / ETA labels
   useEffect(() => {
@@ -220,6 +230,7 @@ export function WetWeighingStation({
     setLastRecorded(reading);
     setScannedTag('');
     setAwaitingWeight(false);
+    triggerFlash('success');
 
     if (nextPlant >= totalPlants) {
       playComplete();
@@ -227,7 +238,7 @@ export function WetWeighingStation({
       playCapture();
       setTimeout(() => scanInputRef.current?.focus(), 50);
     }
-  }, [awaitingWeight, allDone, scannedTag, selectedStrain, nextPlant, totalPlants, onRecordPlant, playCapture, playComplete]);
+  }, [awaitingWeight, allDone, scannedTag, selectedStrain, nextPlant, totalPlants, onRecordPlant, playCapture, playComplete, triggerFlash]);
 
   const { armed, reset: resetAutoCapture } = useAutoCapture({
     enabled: autoCapture && awaitingWeight && !allDone,
@@ -241,6 +252,7 @@ export function WetWeighingStation({
     if (isDuplicate) {
       setDuplicateAlert(tagId);
       playError();
+      triggerFlash('error');
       setTimeout(() => setDuplicateAlert(null), 3000);
       return;
     }
@@ -260,6 +272,7 @@ export function WetWeighingStation({
     if (isDuplicate) {
       setDuplicateAlert(tag);
       playError();
+      triggerFlash('error');
       setTagInput('');
       setTimeout(() => setDuplicateAlert(null), 3000);
       return;
@@ -328,6 +341,15 @@ export function WetWeighingStation({
 
   return (
     <div className="max-w-5xl mx-auto py-2 sm:py-4 px-2 sm:px-4">
+      {/* Full-screen capture flash — green for success, red for duplicate/error */}
+      {flash && (
+        <div
+          aria-hidden="true"
+          className={`fixed inset-0 pointer-events-none z-40 motion-safe:animate-flash ${
+            flash === 'success' ? 'bg-green-500/30' : 'bg-red-500/35'
+          }`}
+        />
+      )}
       {/* Header */}
       <div className="flex justify-between items-start mb-2 sm:mb-4">
         <div className="min-w-0 flex-1">
