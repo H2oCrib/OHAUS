@@ -22,12 +22,11 @@ rm -rf "${OUT}"
 
 mkdir -p "${OUT}/Contents/MacOS" "${OUT}/Contents/Resources"
 
-# The bundle executable — a tiny shim that just forwards to the repo script.
-# Keeping the logic in the repo means edits survive rebuilds.
-cat > "${OUT}/Contents/MacOS/ScaleSync" <<EOF
-#!/bin/bash
-exec "${LAUNCHER}"
-EOF
+# Embed the launcher INSIDE the bundle. macOS TCC blocks .app bundles from
+# reading arbitrary user-dir files, so a shim that execs ~/Desktop/.../launch.sh
+# hits "Operation not permitted". Copying the script in makes the bundle
+# self-contained and sidesteps the sandbox.
+cp "${LAUNCHER}" "${OUT}/Contents/MacOS/ScaleSync"
 chmod +x "${OUT}/Contents/MacOS/ScaleSync"
 
 # Info.plist — bare minimum metadata for macOS to treat this as an app.
