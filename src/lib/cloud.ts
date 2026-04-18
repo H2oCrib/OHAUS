@@ -140,6 +140,17 @@ export async function markHarvestCompleted(
   return ok(undefined);
 }
 
+export async function deleteCloudHarvest(harvestId: string): Promise<Result> {
+  const missing = requireClient();
+  if (missing) return missing;
+  const { error } = await supabase!
+    .from('harvests')
+    .delete()
+    .eq('id', harvestId);
+  if (error) return err(`harvests delete: ${error.message}`);
+  return ok(undefined);
+}
+
 // ─── List + load (used by Phase 5 resume flow; exported now for outbox tests) ──
 
 export interface CloudHarvestSummary {

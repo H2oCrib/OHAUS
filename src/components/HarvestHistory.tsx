@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   listCompletedHarvests,
   loadCloudHarvest,
+  deleteCloudHarvest,
   type CloudHarvestHistoryItem,
 } from '../lib/cloud';
 import { GRAMS_PER_LB } from '../lib/types';
@@ -33,6 +34,24 @@ export function HarvestHistory({ onBack }: HarvestHistoryProps) {
   const [detail, setDetail] = useState<HarvestSession | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleDelete = async (id: string) => {
+    setDeleteError(null);
+    setDeletingId(id);
+    const result = await deleteCloudHarvest(id);
+    setDeletingId(null);
+    if (!result.ok) {
+      setDeleteError(result.error);
+      return;
+    }
+    setItems(prev => (prev ?? []).filter(h => h.id !== id));
+    setConfirmDeleteId(null);
+    if (detail && detail.config.id === id) setDetail(null);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -66,16 +85,47 @@ export function HarvestHistory({ onBack }: HarvestHistoryProps) {
 
   // Detail view — reuse WetSummary read-only.
   if (detail) {
+    const isDeleting = deletingId === detail.config.id;
+    const awaitingConfirm = confirmDeleteId === detail.config.id;
     return (
       <div className="max-w-5xl mx-auto py-4 px-3 sm:px-4">
-        <div className="mb-3 flex gap-2">
+        <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
           <button
             onClick={() => setDetail(null)}
             className="px-3 py-1.5 bg-base-800 hover:bg-base-700 border border-base-600 rounded text-xs text-gray-400 transition-colors"
           >
             ← Back to History
           </button>
+          {!awaitingConfirm ? (
+            <button
+              onClick={() => setConfirmDeleteId(detail.config.id)}
+              className="px-3 py-1.5 bg-base-800 hover:bg-red-500/15 border border-base-600 hover:border-red-500/40 rounded text-xs text-gray-400 hover:text-red-400 transition-colors"
+            >
+              Delete Harvest
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-red-400">Delete this harvest and all readings?</span>
+              <button
+                onClick={() => handleDelete(detail.config.id)}
+                disabled={isDeleting}
+                className="px-3 py-1.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-medium rounded transition-colors"
+              >
+                {isDeleting ? 'Deleting…' : 'Confirm Delete'}
+              </button>
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                disabled={isDeleting}
+                className="px-3 py-1.5 bg-base-800 hover:bg-base-700 border border-base-600 text-gray-400 text-xs rounded transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
+        {deleteError && (
+          <p className="text-xs text-red-400 mb-3">Delete failed: {deleteError}</p>
+        )}
         <WetSummary
           session={detail}
           onExport={() => exportWetExcel(detail)}
@@ -129,17 +179,19 @@ export function HarvestHistory({ onBack }: HarvestHistoryProps) {
                   <th className="px-3 sm:px-4 py-2 text-[10px] sm:text-xs font-medium uppercase tracking-widest text-gray-500 text-right">Plants</th>
                   <th className="px-3 sm:px-4 py-2 text-[10px] sm:text-xs font-medium uppercase tracking-widest text-gray-500 text-right">Weight (g)</th>
                   <th className="px-3 sm:px-4 py-2 text-[10px] sm:text-xs font-medium uppercase tracking-widest text-gray-500 text-right">Lbs</th>
-                  <th className="w-8"></th>
+                  <th className="w-24 px-2"></th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((h, i) => {
                   const lbs = h.total_weight_grams / GRAMS_PER_LB;
+                  const isConfirming = confirmDeleteId === h.id;
+                  const isDeleting = deletingId === h.id;
                   return (
                     <tr
                       key={h.id}
-                      onClick={() => openDetail(h.id)}
-                      className={`cursor-pointer hover:bg-base-700/50 transition-colors ${i % 2 === 0 ? 'bg-base-900' : 'bg-base-800/30'}`}
+                      onClick={() => !isConfirming && openDetail(h.id)}
+                      className={`${isConfirming ? 'bg-red-500/10' : (i % 2 === 0 ? 'bg-base-900' : 'bg-base-800/30')} ${isConfirming ? '' : 'cursor-pointer hover:bg-base-700/50'} transition-colors`}
                     >
                       <td className="px-3 sm:px-4 py-2">
                         <p className="text-gray-200 font-medium truncate">{h.batch_name}</p>
@@ -151,7 +203,35 @@ export function HarvestHistory({ onBack }: HarvestHistoryProps) {
                       </td>
                       <td className="px-3 sm:px-4 py-2 font-mono text-right text-gray-200 tabular-nums">{h.total_weight_grams.toFixed(1)}</td>
                       <td className="px-3 sm:px-4 py-2 font-mono text-right text-gray-200 tabular-nums">{lbs.toFixed(2)}</td>
-                      <td className="px-2 py-2 text-gray-600 text-right">›</td>
+                      <td className="px-2 py-2 text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                        {!isConfirming ? (
+                          <button
+                            onClick={() => setConfirmDeleteId(h.id)}
+                            aria-label={`Delete ${h.batch_name}`}
+                            className="text-gray-600 hover:text-red-400 text-sm px-2 transition-colors"
+                            title="Delete harvest"
+                          >
+                            🗑
+                          </button>
+                        ) : (
+                          <div className="inline-flex gap-1">
+                            <button
+                              onClick={() => handleDelete(h.id)}
+                              disabled={isDeleting}
+                              className="px-2 py-0.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-[10px] font-medium rounded"
+                            >
+                              {isDeleting ? '…' : 'Delete'}
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteId(null)}
+                              disabled={isDeleting}
+                              className="px-2 py-0.5 bg-base-800 hover:bg-base-700 border border-base-600 text-gray-400 text-[10px] rounded"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -163,6 +243,9 @@ export function HarvestHistory({ onBack }: HarvestHistoryProps) {
 
       {detailError && (
         <p className="text-xs text-red-400 mt-2">Load failed: {detailError}</p>
+      )}
+      {deleteError && (
+        <p className="text-xs text-red-400 mt-2">Delete failed: {deleteError}</p>
       )}
       {detailLoading && (
         <p className="text-xs text-gray-500 mt-2">Opening harvest…</p>
