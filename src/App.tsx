@@ -10,6 +10,7 @@ import { ScannerPortal } from './components/ScannerPortal';
 import { WetSetup } from './components/WetSetup';
 import { WetWeighingStation } from './components/WetWeighingStation';
 import { WetSummary } from './components/WetSummary';
+import { HarvestHistory } from './components/HarvestHistory';
 import { UserGuide } from './components/UserGuide';
 import { exportExcel } from './lib/export';
 import { exportWetExcel } from './lib/wet-export';
@@ -550,7 +551,13 @@ function MainApp() {
             onSelectMode={handleSelectMode}
             onDisconnect={handleDisconnect}
             demoMode={demoMode}
+            onViewHistory={() => setPhase('history')}
+            historyEnabled={cloudEnabled}
           />
+        )}
+
+        {phase === 'history' && (
+          <HarvestHistory onBack={() => setPhase('modeSelect')} />
         )}
 
         {phase === 'setup' && (

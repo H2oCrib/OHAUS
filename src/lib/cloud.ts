@@ -167,6 +167,55 @@ export async function listCloudHarvests(
   return ok((data ?? []) as CloudHarvestSummary[]);
 }
 
+export interface CloudHarvestHistoryItem extends CloudHarvestSummary {
+  completed_at: string | null;
+  total_weight_grams: number;
+  reading_count: number;
+}
+
+/**
+ * List previously completed harvests for the history browser.
+ * Includes aggregated totals so the list can render without a second fetch.
+ */
+export async function listCompletedHarvests(
+  limit = 50,
+): Promise<Result<CloudHarvestHistoryItem[]>> {
+  const missing = requireClient();
+  if (missing) return missing;
+  const { data: harvests, error: hErr } = await supabase!
+    .from('harvests')
+    .select('id, batch_name, workflow_mode, status, total_plants, started_at, completed_at, device_id')
+    .eq('status', 'completed')
+    .order('completed_at', { ascending: false })
+    .limit(limit);
+  if (hErr) return err(`history list: ${hErr.message}`);
+  const rows = (harvests ?? []) as Array<CloudHarvestSummary & { completed_at: string | null }>;
+  if (rows.length === 0) return ok([]);
+
+  const ids = rows.map(r => r.id);
+  const { data: readingRows, error: rErr } = await supabase!
+    .from('harvest_readings')
+    .select('harvest_id, weight_grams')
+    .in('harvest_id', ids);
+  if (rErr) return err(`history readings: ${rErr.message}`);
+
+  const totals: Record<string, { weight: number; count: number }> = {};
+  for (const r of (readingRows ?? []) as { harvest_id: string; weight_grams: string | number }[]) {
+    const k = r.harvest_id;
+    if (!totals[k]) totals[k] = { weight: 0, count: 0 };
+    totals[k].weight += Number(r.weight_grams);
+    totals[k].count += 1;
+  }
+
+  return ok(
+    rows.map(r => ({
+      ...r,
+      total_weight_grams: Math.round((totals[r.id]?.weight ?? 0) * 10) / 10,
+      reading_count: totals[r.id]?.count ?? 0,
+    })),
+  );
+}
+
 /** Count reading rows per active harvest so the resume UI can show progress. */
 export async function countReadingsPerHarvest(
   harvestIds: string[],

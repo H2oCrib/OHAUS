@@ -45,7 +45,7 @@ export interface StrainSummary {
   status: 'VERIFIED' | 'VARIANCE' | null;
 }
 
-export type AppPhase = 'connect' | 'modeSelect' | 'setup' | 'weighing' | 'summary' | 'wetSetup' | 'wetWeighing' | 'wetSummary';
+export type AppPhase = 'connect' | 'modeSelect' | 'setup' | 'weighing' | 'summary' | 'wetSetup' | 'wetWeighing' | 'wetSummary' | 'history';
 
 export type WorkflowMode = 'dry' | 'wet';
 

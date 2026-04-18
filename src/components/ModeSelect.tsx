@@ -4,9 +4,11 @@ interface ModeSelectProps {
   onSelectMode: (mode: WorkflowMode) => void;
   onDisconnect: () => void;
   demoMode: boolean;
+  onViewHistory?: () => void;
+  historyEnabled?: boolean;
 }
 
-export function ModeSelect({ onSelectMode, onDisconnect, demoMode }: ModeSelectProps) {
+export function ModeSelect({ onSelectMode, onDisconnect, demoMode, onViewHistory, historyEnabled }: ModeSelectProps) {
   return (
     <div className="min-h-[75vh] flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
@@ -59,6 +61,20 @@ export function ModeSelect({ onSelectMode, onDisconnect, demoMode }: ModeSelectP
             </svg>
           </button>
         </div>
+
+        {historyEnabled && onViewHistory && (
+          <div className="mt-6">
+            <button
+              onClick={onViewHistory}
+              className="group w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-base-700 hover:border-sky-500/40 rounded-lg hover:bg-sky-500/5 transition-all duration-200"
+            >
+              <svg className="w-4 h-4 text-sky-400/80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-xs uppercase tracking-widest text-gray-400 group-hover:text-sky-300 transition-colors">Harvest History</span>
+            </button>
+          </div>
+        )}
 
         <div className="text-center mt-8">
           <button
