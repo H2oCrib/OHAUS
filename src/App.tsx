@@ -18,6 +18,7 @@ import { enqueue as enqueueCloudOp, startFlushWorker } from './lib/outbox';
 import { getDeviceId } from './lib/device-id';
 import { cloudEnabled } from './lib/supabase';
 import { listCloudHarvests, countReadingsPerHarvest, loadCloudHarvest, type CloudHarvestSummary } from './lib/cloud';
+import { useCloudHarvest } from './hooks/useCloudHarvest';
 import type { SaveMode } from './components/WetSetup';
 import type {
   AppPhase, ScaleReading, StrainConfig, StrainSession, WeightReading,
@@ -359,6 +360,22 @@ function MainApp() {
   const handleUpdateWetReadings = useCallback((readings: WetWeightReading[]) => {
     setHarvestSession(prev => prev ? { ...prev, readings } : prev);
   }, []);
+
+  // Realtime merge — another device wrote a reading, append if we don't have it.
+  const handleRemoteReading = useCallback((incoming: WetWeightReading) => {
+    setHarvestSession(prev => {
+      if (!prev) return prev;
+      if (prev.readings.some(r => r.tagId === incoming.tagId)) return prev;
+      return { ...prev, readings: [...prev.readings, incoming] };
+    });
+  }, []);
+
+  useCloudHarvest({
+    enabled: saveMode === 'cloud' && phase === 'wetWeighing',
+    harvestId: harvestSession?.config.id ?? null,
+    deviceId: deviceIdRef.current,
+    onRemoteReading: handleRemoteReading,
+  });
 
   const handleFinishHarvest = async () => {
     await scale.stopContinuous();
