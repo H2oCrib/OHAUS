@@ -16,6 +16,8 @@ import { exportWetExcel } from './lib/wet-export';
 import { loadSession, clearSession, createDebouncedSave, peekSession } from './lib/session-persistence';
 import { enqueue as enqueueCloudOp, startFlushWorker } from './lib/outbox';
 import { getDeviceId } from './lib/device-id';
+import { cloudEnabled } from './lib/supabase';
+import { listCloudHarvests, countReadingsPerHarvest, loadCloudHarvest, type CloudHarvestSummary } from './lib/cloud';
 import type { SaveMode } from './components/WetSetup';
 import type {
   AppPhase, ScaleReading, StrainConfig, StrainSession, WeightReading,
@@ -68,6 +70,9 @@ function MainApp() {
   const [pendingResume, setPendingResume] = useState<ReturnType<typeof peekSession>>(null);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [saveMode, setSaveMode] = useState<SaveMode>('local');
+  const [cloudResumeList, setCloudResumeList] = useState<Array<CloudHarvestSummary & { recorded: number }>>([]);
+  const [cloudResumeDismissed, setCloudResumeDismissed] = useState(false);
+  const [cloudLoadError, setCloudLoadError] = useState<string | null>(null);
   const deviceIdRef = useRef<string>('');
   if (!deviceIdRef.current) deviceIdRef.current = getDeviceId();
 
@@ -101,6 +106,47 @@ function MainApp() {
     const stop = startFlushWorker();
     return stop;
   }, []);
+
+  // Fetch list of active cloud harvests so user can resume one started on another device.
+  useEffect(() => {
+    if (!cloudEnabled) return;
+    let cancelled = false;
+    (async () => {
+      const listResult = await listCloudHarvests(10);
+      if (cancelled || !listResult.ok) return;
+      const ids = listResult.data.map(h => h.id);
+      const countResult = await countReadingsPerHarvest(ids);
+      if (cancelled) return;
+      const counts = countResult.ok ? countResult.data : {};
+      // Filter to harvests that are still in progress — skip ones that hit their total.
+      const filtered = listResult.data
+        .map(h => ({ ...h, recorded: counts[h.id] ?? 0 }))
+        .filter(h => h.recorded < h.total_plants);
+      setCloudResumeList(filtered);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleResumeCloud = async (harvestId: string) => {
+    setCloudLoadError(null);
+    const result = await loadCloudHarvest(harvestId);
+    if (!result.ok) {
+      setCloudLoadError(result.error);
+      return;
+    }
+    setHarvestSession(result.data);
+    setWorkflowMode('wet');
+    setPhase('wetWeighing');
+    setSaveMode('cloud');         // continue syncing new captures back
+    setDemoMode(true);            // no physical scale from a resumed cloud session
+    setCloudResumeDismissed(true);
+    setPendingResume(null);
+    setCloudResumeList([]);
+  };
+
+  const handleDismissCloudResume = () => {
+    setCloudResumeDismissed(true);
+  };
 
   const handleResumeSession = () => {
     const saved = loadSession();
@@ -392,6 +438,48 @@ function MainApp() {
       {sessionRestored && (
         <div className="bg-green-500/10 border-b border-green-500/20 px-4 py-2 text-center">
           <span className="text-xs font-medium text-green-400">Session restored from auto-save</span>
+        </div>
+      )}
+
+      {/* Cloud resume list — active harvests started on any device */}
+      {!cloudResumeDismissed && cloudResumeList.length > 0 && (phase === 'connect' || phase === 'modeSelect') && (
+        <div className="bg-base-900/60 border-b border-base-700 px-4 py-2.5">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-gray-500">
+              <span className="w-1.5 h-1.5 rounded-full bg-sky-400 inline-block" />
+              Cloud · {cloudResumeList.length} active harvest{cloudResumeList.length === 1 ? '' : 's'}
+            </div>
+            <button
+              onClick={handleDismissCloudResume}
+              className="text-[10px] text-gray-600 hover:text-gray-400 uppercase tracking-wider"
+            >
+              Dismiss
+            </button>
+          </div>
+          <div className="space-y-1">
+            {cloudResumeList.map(h => {
+              const isThisDevice = h.device_id === deviceIdRef.current;
+              return (
+                <div key={h.id} className="flex items-center justify-between gap-3 text-xs text-gray-300 bg-base-800/60 border border-base-700 rounded px-2.5 py-1.5">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <span className="font-medium truncate">{h.batch_name}</span>
+                    <span className="font-mono text-gray-500 shrink-0">{h.recorded}/{h.total_plants}</span>
+                    <span className="text-gray-600 shrink-0">started {formatTimeAgo(new Date(h.started_at))}</span>
+                    {!isThisDevice && <span className="text-sky-400/70 text-[10px] shrink-0">other device</span>}
+                  </div>
+                  <button
+                    onClick={() => handleResumeCloud(h.id)}
+                    className="px-2.5 py-0.5 bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-medium rounded transition-colors shrink-0"
+                  >
+                    Resume
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          {cloudLoadError && (
+            <p className="text-[10px] text-red-400 mt-1">Load failed: {cloudLoadError}</p>
+          )}
         </div>
       )}
 

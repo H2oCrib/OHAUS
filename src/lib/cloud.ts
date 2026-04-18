@@ -166,3 +166,78 @@ export async function listCloudHarvests(
   if (error) return err(`harvests list: ${error.message}`);
   return ok((data ?? []) as CloudHarvestSummary[]);
 }
+
+/** Count reading rows per active harvest so the resume UI can show progress. */
+export async function countReadingsPerHarvest(
+  harvestIds: string[],
+): Promise<Result<Record<string, number>>> {
+  const missing = requireClient();
+  if (missing) return missing;
+  if (harvestIds.length === 0) return ok({});
+  const { data, error } = await supabase!
+    .from('harvest_readings')
+    .select('harvest_id')
+    .in('harvest_id', harvestIds);
+  if (error) return err(`readings count: ${error.message}`);
+  const counts: Record<string, number> = {};
+  for (const row of (data ?? []) as { harvest_id: string }[]) {
+    counts[row.harvest_id] = (counts[row.harvest_id] ?? 0) + 1;
+  }
+  return ok(counts);
+}
+
+/**
+ * Fetch a complete HarvestSession (config + readings) from Supabase by id.
+ * Reconstructs the same shape the rest of the app uses.
+ */
+export async function loadCloudHarvest(
+  harvestId: string,
+): Promise<Result<HarvestSession>> {
+  const missing = requireClient();
+  if (missing) return missing;
+
+  const { data: harvestRow, error: hErr } = await supabase!
+    .from('harvests')
+    .select('id, batch_name, started_at, status, completed_at')
+    .eq('id', harvestId)
+    .single();
+  if (hErr) return err(`harvests load: ${hErr.message}`);
+  if (!harvestRow) return err('harvest not found');
+
+  const { data: strainRows, error: sErr } = await supabase!
+    .from('harvest_strains')
+    .select('id, strain, plant_count, position')
+    .eq('harvest_id', harvestId)
+    .order('position', { ascending: true });
+  if (sErr) return err(`strains load: ${sErr.message}`);
+
+  const { data: readingRows, error: rErr } = await supabase!
+    .from('harvest_readings')
+    .select('id, plant_number, strain, tag_id, weight_grams, captured_at')
+    .eq('harvest_id', harvestId)
+    .order('captured_at', { ascending: true });
+  if (rErr) return err(`readings load: ${rErr.message}`);
+
+  const session: HarvestSession = {
+    config: {
+      id: harvestRow.id,
+      batchName: harvestRow.batch_name,
+      date: new Date(harvestRow.started_at),
+      strains: (strainRows ?? []).map(s => ({
+        id: s.id,
+        strain: s.strain,
+        plantCount: s.plant_count,
+      })),
+    },
+    readings: (readingRows ?? []).map(r => ({
+      id: r.id,
+      plantNumber: r.plant_number,
+      strain: r.strain,
+      tagId: r.tag_id,
+      weightGrams: Number(r.weight_grams),
+      timestamp: new Date(r.captured_at),
+    })),
+    completed: harvestRow.status === 'completed',
+  };
+  return ok(session);
+}
