@@ -4,7 +4,7 @@ import { GRAMS_PER_LB } from '../lib/types';
 interface WetSummaryProps {
   session: HarvestSession;
   onExport: () => void;
-  onNewSession: () => void;
+  onNewSession?: () => void;
 }
 
 function computeHarvestSummaries(session: HarvestSession): HarvestSummary[] {
@@ -131,12 +131,14 @@ export function WetSummary({ session, onExport, onNewSession }: WetSummaryProps)
         >
           Export Excel
         </button>
-        <button
-          onClick={onNewSession}
-          className="flex-1 py-3 bg-base-800 hover:bg-base-700 text-gray-400 font-medium rounded-lg transition-colors border border-base-600 text-sm sm:text-base"
-        >
-          New Session
-        </button>
+        {onNewSession && (
+          <button
+            onClick={onNewSession}
+            className="flex-1 py-3 bg-base-800 hover:bg-base-700 text-gray-400 font-medium rounded-lg transition-colors border border-base-600 text-sm sm:text-base"
+          >
+            New Session
+          </button>
+        )}
       </div>
     </div>
   );

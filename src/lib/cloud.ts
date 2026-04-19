@@ -10,6 +10,8 @@
  */
 
 import { supabase } from './supabase';
+import { parseSessionFile } from './session-persistence';
+import { parseHarvestXlsx } from './wet-import';
 import type {
   HarvestSession,
   WetWeightReading,
@@ -138,6 +140,94 @@ export async function markHarvestCompleted(
     .eq('id', harvestId);
   if (error) return err(`harvests mark-completed: ${error.message}`);
   return ok(undefined);
+}
+
+// ─── Import a completed harvest JSON report into Supabase ────────────────
+//
+// Reads a .json file exported via `exportSessionFile` (session-persistence),
+// validates the shape, and pushes harvest + strains + readings + marks the
+// harvest completed. Idempotent via UUID upsert — re-importing the same file
+// is a no-op (or refreshes fields).
+//
+// `options.regenerateIds` assigns fresh UUIDs to every row. Use when seeding
+// an imported report as a separate record (e.g. a friend's harvest file you
+// don't want to collide with an active session of the same id).
+export interface ImportHarvestResult {
+  session: HarvestSession;
+  plantsImported: number;
+}
+
+export async function importHarvestReport(
+  file: File,
+  deviceId: string,
+  options: { regenerateIds?: boolean } = {},
+): Promise<Result<ImportHarvestResult>> {
+  const missing = requireClient();
+  if (missing) return missing;
+
+  const name = (file.name || '').toLowerCase();
+  const isXlsx = name.endsWith('.xlsx') || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  const isJson = name.endsWith('.json') || file.type === 'application/json';
+
+  let harvestSession: HarvestSession | null = null;
+  let workflowMode: WorkflowMode = 'wet';
+
+  if (isXlsx) {
+    harvestSession = await parseHarvestXlsx(file);
+    if (!harvestSession) return err('Invalid Excel report — expected a ScaleSync wet-weight export with Summary + Detail sheets');
+  } else if (isJson) {
+    let text: string;
+    try {
+      text = await file.text();
+    } catch {
+      return err('Could not read file');
+    }
+    const parsed = parseSessionFile(text);
+    if (!parsed) return err('Invalid harvest file — expected a ScaleSync .json export');
+    harvestSession = parsed.harvestSession;
+    workflowMode = parsed.workflowMode;
+  } else {
+    return err('Unsupported file type — use .json or .xlsx');
+  }
+
+  if (workflowMode !== 'wet') {
+    return err('Only wet-weight harvests can be imported');
+  }
+  if (!harvestSession.config?.batchName) {
+    return err('Missing batch name — file may be corrupted');
+  }
+  if (!Array.isArray(harvestSession.readings) || harvestSession.readings.length === 0) {
+    return err('No plant readings found in file');
+  }
+
+  // xlsx parser already generates fresh UUIDs; JSON path may preserve originals.
+  let session: HarvestSession = harvestSession;
+  if (options.regenerateIds && !isXlsx) {
+    const newHarvestId = crypto.randomUUID();
+    session = {
+      ...harvestSession,
+      config: {
+        ...harvestSession.config,
+        id: newHarvestId,
+        strains: harvestSession.config.strains.map(s => ({ ...s, id: crypto.randomUUID() })),
+      },
+      readings: harvestSession.readings.map(r => ({ ...r, id: crypto.randomUUID() })),
+    };
+  }
+
+  // Force completed so it lands in history, not active sessions.
+  const completedSession: HarvestSession = { ...session, completed: true };
+
+  const pushResult = await pushHarvest(completedSession, 'wet', deviceId);
+  if (!pushResult.ok) return err(`Import failed at harvest: ${pushResult.error}`);
+
+  const readingsResult = await pushReadings(completedSession.config.id, completedSession.readings, deviceId);
+  if (!readingsResult.ok) return err(`Import failed at readings: ${readingsResult.error}`);
+
+  const completeResult = await markHarvestCompleted(completedSession.config.id);
+  if (!completeResult.ok) return err(`Import failed at completion: ${completeResult.error}`);
+
+  return ok({ session: completedSession, plantsImported: completedSession.readings.length });
 }
 
 export async function deleteCloudHarvest(harvestId: string): Promise<Result> {

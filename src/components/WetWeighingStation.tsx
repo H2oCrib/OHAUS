@@ -460,17 +460,70 @@ export function WetWeighingStation({
         </div>
       </div>
 
-      {/* Progress Bar */}
-      <div className="mb-2 sm:mb-4">
-        <div className="flex justify-between items-center mb-0.5 sm:mb-1">
-          <span className="text-[10px] sm:text-xs font-medium uppercase tracking-widest text-gray-500">Progress</span>
-          <span className="text-[10px] sm:text-xs font-mono text-gray-400">{session.readings.length}/{totalPlants}</span>
+      {/* Analytical Readout — mint workflow edge, big tabular number, tick-band progress */}
+      <div className="relative bg-base-850 border border-base-700 rounded-2xl overflow-hidden mb-3 sm:mb-4">
+        <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-green-500" />
+        <div className="flex justify-between items-center px-4 sm:px-6 pt-3 sm:pt-4">
+          <div className="flex items-center gap-2">
+            <div className={`w-1.5 h-1.5 rounded-full ${isStable ? 'bg-green-400' : 'bg-amber-400 animate-pulse'}`} />
+            <span className={`text-[10px] font-mono font-medium uppercase tracking-[0.25em] ${isStable ? 'text-gray-400' : 'text-amber-400'}`}>
+              Live &middot; {isStable ? 'Stable' : 'Settling'}
+            </span>
+          </div>
+          <span className="text-[10px] font-mono text-gray-500 tracking-[0.2em] uppercase">9600&middot;8-N-1</span>
         </div>
-        <div className="h-1 sm:h-1.5 bg-base-800 rounded-full overflow-hidden border border-base-700">
-          <div
-            className={`h-full rounded-full transition-all duration-300 ${allDone ? 'bg-green-500' : 'bg-green-500/70'}`}
-            style={{ width: `${Math.min(progress * 100, 100)}%` }}
-          />
+        <div className="flex items-end justify-between px-4 sm:px-6 py-3 sm:py-4 gap-4 sm:gap-8">
+          <div className="flex items-baseline gap-2">
+            <span
+              className="text-[64px] sm:text-[88px] font-light leading-none tabular-nums text-gray-50"
+              style={{ letterSpacing: '-0.04em', fontVariantNumeric: 'tabular-nums' }}
+            >
+              {displayWeight.toFixed(1)}
+            </span>
+            <span className="text-[20px] sm:text-[22px] font-mono text-gray-500 mb-1 sm:mb-2">{displayUnit}</span>
+          </div>
+          <div className="flex gap-6 sm:gap-8 pb-2 sm:pb-3">
+            <div className="text-right">
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-gray-500">Plant</p>
+              <p className="text-base sm:text-lg font-mono tabular-nums text-gray-100 mt-0.5">
+                <span className="font-semibold">{session.readings.length}</span>
+                <span className="text-gray-600"> / {totalPlants}</span>
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-gray-500">Total</p>
+              <p className="text-base sm:text-lg font-mono tabular-nums text-gray-100 mt-0.5 font-semibold">
+                {(session.readings.reduce((s, r) => s + r.weightGrams, 0) / 1000).toFixed(2)}
+                <span className="text-gray-500 text-xs ml-0.5 font-light">kg</span>
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="px-4 sm:px-6 pb-3 sm:pb-4">
+          <div className="relative h-6">
+            <div className="absolute left-0 right-0 top-1/2 h-px bg-base-700" />
+            <div className="absolute left-0 right-0 top-0 bottom-0 flex justify-between">
+              {Array.from({ length: Math.min(totalPlants, 78) + 1 }).map((_, i) => {
+                const major = i === 0 || i === totalPlants || i % Math.max(1, Math.ceil(totalPlants / 10)) === 0;
+                return <div key={i} className={`w-px ${major ? 'h-3 bg-gray-500' : 'h-1.5 bg-base-600'} self-center`} />;
+              })}
+            </div>
+            <div
+              className="absolute top-1/2 left-0 h-[2px] bg-green-500 -translate-y-1/2 transition-all duration-300"
+              style={{ width: `${Math.min(progress * 100, 100)}%` }}
+            />
+            {session.readings.length > 0 && (
+              <div
+                className="absolute top-1/2 w-2 h-2 bg-green-400 rounded-full -translate-y-1/2 -translate-x-1/2 transition-all duration-300"
+                style={{ left: `${Math.min(progress * 100, 100)}%`, boxShadow: '0 0 12px rgba(124,255,176,0.6)' }}
+              />
+            )}
+          </div>
+          <div className="flex justify-between text-[10px] font-mono text-gray-600 tracking-[0.1em] uppercase mt-1.5">
+            <span>0</span>
+            <span className="text-gray-400">{session.readings.length} of {totalPlants}</span>
+            <span>{totalPlants}</span>
+          </div>
         </div>
       </div>
 
@@ -485,22 +538,8 @@ export function WetWeighingStation({
       )}
 
       <div className="space-y-2 sm:space-y-3">
-        {/* Scale readout + scan input */}
-        <div className="bg-base-900 border border-green-500/20 rounded-lg p-3 sm:p-4">
-          {/* Weight display */}
-          <div className="flex items-baseline justify-center mb-3">
-            <span className="text-4xl sm:text-5xl font-mono font-light tabular-nums text-gray-50">
-              {displayWeight.toFixed(1)}
-            </span>
-            <span className="text-lg font-mono font-light text-gray-500 ml-2">{displayUnit}</span>
-            <div className="ml-3 flex items-center gap-1.5">
-              <div className={`w-2 h-2 rounded-full ${isStable ? 'bg-green-500' : 'bg-amber-500 animate-pulse'}`} />
-              <span className={`text-[10px] sm:text-xs font-medium uppercase ${isStable ? 'text-green-400' : 'text-amber-400'}`}>
-                {isStable ? 'Stable' : '...'}
-              </span>
-            </div>
-          </div>
-
+        {/* Scan input card */}
+        <div className="bg-base-900 border border-green-500/20 rounded-2xl p-3 sm:p-4">
           {/* Scan input */}
           <form onSubmit={handleTagSubmit}>
             <input

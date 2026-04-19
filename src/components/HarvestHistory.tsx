@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   listCompletedHarvests,
   loadCloudHarvest,
   deleteCloudHarvest,
+  importHarvestReport,
   type CloudHarvestHistoryItem,
 } from '../lib/cloud';
+import { getDeviceId } from '../lib/device-id';
 import { GRAMS_PER_LB } from '../lib/types';
 import type { HarvestSession } from '../lib/types';
 import { WetSummary } from './WetSummary';
@@ -38,6 +40,30 @@ export function HarvestHistory({ onBack }: HarvestHistoryProps) {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importNotice, setImportNotice] = useState<string | null>(null);
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setImportError(null);
+    setImportNotice(null);
+    setImporting(true);
+    const result = await importHarvestReport(file, getDeviceId(), { regenerateIds: true });
+    setImporting(false);
+    if (!result.ok) {
+      setImportError(result.error);
+      return;
+    }
+    setImportNotice(`Imported "${result.data.session.config.batchName}" — ${result.data.plantsImported} plants`);
+    // Refresh list
+    const refreshed = await listCompletedHarvests(50);
+    if (refreshed.ok) setItems(refreshed.data);
+  };
 
   const handleDelete = async (id: string) => {
     setDeleteError(null);
@@ -129,7 +155,6 @@ export function HarvestHistory({ onBack }: HarvestHistoryProps) {
         <WetSummary
           session={detail}
           onExport={() => exportWetExcel(detail)}
-          onNewSession={() => setDetail(null)}
         />
       </div>
     );
@@ -137,18 +162,61 @@ export function HarvestHistory({ onBack }: HarvestHistoryProps) {
 
   return (
     <div className="max-w-4xl mx-auto py-4 sm:py-6 px-3 sm:px-4">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
         <div>
           <p className="text-[10px] sm:text-xs font-medium uppercase tracking-widest text-gray-500 mb-0.5">Cloud</p>
           <h2 className="text-xl sm:text-2xl font-semibold text-gray-50">Harvest History</h2>
         </div>
-        <button
-          onClick={onBack}
-          className="px-3 py-1.5 bg-base-800 hover:bg-base-700 border border-base-600 rounded text-xs text-gray-400 transition-colors"
-        >
-          ← Back
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json,application/json,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            onChange={handleImport}
+            className="hidden"
+          />
+          <button
+            onClick={() => importInputRef.current?.click()}
+            disabled={importing}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 disabled:opacity-50 border border-green-500/30 hover:border-green-500/50 rounded-xl text-xs text-green-400 font-medium transition-colors"
+          >
+            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3v12m0 0l-4-4m4 4l4-4 M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+            </svg>
+            {importing ? 'Importing…' : 'Import report'}
+          </button>
+          <button
+            onClick={onBack}
+            className="px-3 py-1.5 bg-base-800 hover:bg-base-700 border border-base-600 rounded-xl text-xs text-gray-400 transition-colors"
+          >
+            ← Back
+          </button>
+        </div>
       </div>
+
+      {importNotice && (
+        <div className="bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-2.5 mb-3 flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+          <span className="text-xs text-green-300">{importNotice}</span>
+          <button
+            onClick={() => setImportNotice(null)}
+            className="ml-auto text-[10px] text-gray-500 hover:text-gray-300"
+          >
+            dismiss
+          </button>
+        </div>
+      )}
+      {importError && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-2.5 mb-3 flex items-center gap-2">
+          <span className="text-xs text-red-400">Import failed: {importError}</span>
+          <button
+            onClick={() => setImportError(null)}
+            className="ml-auto text-[10px] text-gray-500 hover:text-gray-300"
+          >
+            dismiss
+          </button>
+        </div>
+      )}
 
       {loading && (
         <div className="bg-base-900 border border-base-700 rounded-lg p-6 text-center text-xs text-gray-500">

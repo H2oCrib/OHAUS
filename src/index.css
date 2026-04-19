@@ -1,12 +1,42 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-base-950: #0B1222;
-  --color-base-900: #131D33;
-  --color-base-800: #1A2744;
-  --color-base-700: #243355;
-  --color-base-600: #304066;
+  /* COCKPIT — inky navy canvas, vivid workflow accents */
+  --color-base-950: #06080F;
+  --color-base-900: #0A0E1A;
+  --color-base-850: #121829;
+  --color-base-800: #1B2339;
+  --color-base-700: #232C46;
+  --color-base-600: #2E3957;
+
+  --color-cyan-300: #8CE4FF;
+  --color-cyan-400: #4DD0FF;
+  --color-cyan-500: #4DD0FF;
+  --color-cyan-600: #2BB3E6;
+  --color-sky-300: #8CE4FF;
+  --color-sky-400: #4DD0FF;
+  --color-sky-500: #4DD0FF;
+  --color-sky-600: #2BB3E6;
+  --color-violet-400: #9F88FF;
+  --color-violet-500: #7B5CFF;
+
+  --color-green-300: #A6FFCC;
+  --color-green-400: #7CFFB0;
+  --color-green-500: #7CFFB0;
+  --color-green-600: #48D98A;
+  --color-emerald-400: #7CFFB0;
+  --color-emerald-500: #7CFFB0;
+
+  --color-amber-300: #FFCE7A;
+  --color-amber-400: #FFB547;
+  --color-amber-500: #FFB547;
+  --color-amber-600: #E89A2A;
+
+  --color-red-300: #FF9696;
+  --color-red-400: #FF6E6E;
+  --color-red-500: #FF6E6E;
+  --color-red-600: #E54949;
 
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'IBM Plex Mono', 'Courier New', monospace;
@@ -61,20 +91,20 @@
 .animate-flash-error   { animation: flash-error   550ms ease-out forwards; }
 .animate-flash-content { animation: flash-content 1100ms ease-out forwards; }
 
-/* AG Grid theme */
+/* AG Grid theme — Cockpit */
 .ag-theme-alpine-dark {
-  --ag-background-color: #131D33;
-  --ag-header-background-color: #1A2744;
-  --ag-odd-row-background-color: #131D33;
-  --ag-row-hover-color: #243355;
-  --ag-border-color: #243355;
-  --ag-header-foreground-color: #9CA3AF;
-  --ag-foreground-color: #E5E7EB;
+  --ag-background-color: #0A0E1A;
+  --ag-header-background-color: #121829;
+  --ag-odd-row-background-color: #0A0E1A;
+  --ag-row-hover-color: #1B2339;
+  --ag-border-color: #232C46;
+  --ag-header-foreground-color: #8A93A6;
+  --ag-foreground-color: #F5F7FB;
   --ag-font-size: 13px;
   --ag-font-family: 'Inter', system-ui, sans-serif;
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #0B1222; }
-::-webkit-scrollbar-thumb { background: #304066; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #405580; }
+::-webkit-scrollbar-track { background: #06080F; }
+::-webkit-scrollbar-thumb { background: #2E3957; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3F4A6D; }

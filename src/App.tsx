@@ -543,6 +543,8 @@ function MainApp() {
             onDisconnect={handleDisconnect}
             onDemoMode={handleDemoMode}
             error={scale.error}
+            onViewHistory={() => setPhase('history')}
+            historyEnabled={cloudEnabled}
           />
         )}
 
@@ -557,7 +559,7 @@ function MainApp() {
         )}
 
         {phase === 'history' && (
-          <HarvestHistory onBack={() => setPhase('modeSelect')} />
+          <HarvestHistory onBack={() => setPhase(scale.connected || demoMode ? 'modeSelect' : 'connect')} />
         )}
 
         {phase === 'setup' && (

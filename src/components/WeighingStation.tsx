@@ -165,45 +165,93 @@ export function WeighingStation({
         </div>
       </div>
 
-      {/* Progress Bar */}
-      <div className="mb-4">
-        <div className="flex justify-between items-center mb-1">
-          <span className="text-xs font-medium uppercase tracking-widest text-gray-500">Progress</span>
-          <span className="text-xs font-mono text-gray-400">{session.readings.length}/{totalItems}</span>
-        </div>
-        <div className="h-1.5 bg-base-800 rounded-full overflow-hidden border border-base-700">
-          <div
-            className={`h-full rounded-full transition-all duration-300 ${allDone ? 'bg-green-500' : 'bg-cyan-500'}`}
-            style={{ width: `${Math.min(progress * 100, 100)}%` }}
-          />
-        </div>
-      </div>
+      {/* Analytical Readout — cyan workflow edge, big tabular number, tick-band progress */}
+      <div className="relative bg-base-850 border border-base-700 rounded-2xl overflow-hidden mb-4">
+        {/* Workflow edge — cyan for dry */}
+        <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-cyan-500" />
 
-      {/* Scale Readout */}
-      <div className={`bg-base-900 border rounded-lg p-6 mb-4 text-center transition-colors duration-300 ${
-        isStable ? 'border-base-700' : 'border-amber-500/20'
-      }`}>
-        <div className="flex items-baseline justify-center">
-          <span className="text-6xl font-mono font-light tabular-nums text-gray-50 transition-all duration-150">
-            {displayWeight.toFixed(1)}
-          </span>
-          <span className="text-xl font-mono font-light text-gray-500 ml-2">{displayUnit}</span>
-        </div>
-        <div className="mt-3 flex justify-center gap-4 items-center">
-          <div className="flex items-center gap-1.5">
-            <div className={`w-2 h-2 rounded-full ${isStable ? 'bg-green-500' : 'bg-amber-500 animate-pulse'}`} />
-            <span className={`text-xs font-medium uppercase tracking-wider ${isStable ? 'text-green-400' : 'text-amber-400'}`}>
-              {isStable ? 'Stable' : 'Settling'}
+        {/* Top row: eyebrow left, chips right */}
+        <div className="flex justify-between items-center px-6 pt-4">
+          <div className="flex items-center gap-2">
+            <div className={`w-1.5 h-1.5 rounded-full ${isStable ? 'bg-green-400' : 'bg-amber-400 animate-pulse'}`} />
+            <span className={`text-[10px] font-mono font-medium uppercase tracking-[0.25em] ${isStable ? 'text-gray-400' : 'text-amber-400'}`}>
+              Live &middot; {isStable ? 'Stable' : 'Settling'}
             </span>
           </div>
-          {autoMode && (
-            <>
-              <span className="text-base-600">|</span>
-              <span className={`text-xs font-medium uppercase tracking-wider ${armed ? 'text-cyan-400' : 'text-gray-600'}`}>
-                {armed ? 'Armed' : 'Waiting'}
-              </span>
-            </>
-          )}
+          <span className="text-[10px] font-mono text-gray-500 tracking-[0.2em] uppercase">9600&middot;8-N-1</span>
+        </div>
+
+        {/* Number row: readout left, target/mean right */}
+        <div className="flex items-end justify-between px-6 py-4 gap-8">
+          <div className="flex items-baseline gap-2">
+            <span
+              className="text-[96px] font-light leading-none tabular-nums text-gray-50"
+              style={{ letterSpacing: '-0.04em', fontVariantNumeric: 'tabular-nums' }}
+            >
+              {displayWeight.toFixed(1)}
+            </span>
+            <span className="text-[24px] font-mono text-gray-500 mb-2">{displayUnit}</span>
+          </div>
+          <div className="flex gap-8 pb-3">
+            <div className="text-right">
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-gray-500">Unit</p>
+              <p className="text-lg font-mono tabular-nums text-gray-100 mt-0.5">
+                <span className="font-semibold">{Math.min(nextItem, totalItems)}</span>
+                <span className="text-gray-600"> / {totalItems}</span>
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-gray-500">Total</p>
+              <p className="text-lg font-mono tabular-nums text-gray-100 mt-0.5 font-semibold">
+                {runningTotalGrams.toFixed(1)}<span className="text-gray-500 text-sm ml-0.5 font-light">g</span>
+              </p>
+            </div>
+            {autoMode && (
+              <div className="text-right">
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-gray-500">Auto</p>
+                <p className={`text-lg font-mono font-semibold mt-0.5 uppercase ${armed ? 'text-cyan-400' : 'text-gray-500'}`}>
+                  {armed ? 'Armed' : 'Wait'}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Tick-band progress */}
+        <div className="px-6 pb-4">
+          <div className="relative h-6">
+            {/* baseline rule */}
+            <div className="absolute left-0 right-0 top-1/2 h-px bg-base-700" />
+            {/* ticks */}
+            <div className="absolute left-0 right-0 top-0 bottom-0 flex justify-between">
+              {Array.from({ length: totalItems + 1 }).map((_, i) => {
+                const major = i === 0 || i === totalItems || i % Math.max(1, Math.ceil(totalItems / 10)) === 0;
+                return (
+                  <div
+                    key={i}
+                    className={`w-px ${major ? 'h-3 bg-gray-500' : 'h-1.5 bg-base-600'} self-center`}
+                  />
+                );
+              })}
+            </div>
+            {/* fill */}
+            <div
+              className="absolute top-1/2 left-0 h-[2px] bg-cyan-500 -translate-y-1/2 transition-all duration-300"
+              style={{ width: `${Math.min(progress * 100, 100)}%` }}
+            />
+            {/* position marker */}
+            {session.readings.length > 0 && (
+              <div
+                className="absolute top-1/2 w-2 h-2 bg-cyan-400 rounded-full -translate-y-1/2 -translate-x-1/2 transition-all duration-300"
+                style={{ left: `${Math.min(progress * 100, 100)}%`, boxShadow: '0 0 12px rgba(77,208,255,0.6)' }}
+              />
+            )}
+          </div>
+          <div className="flex justify-between text-[10px] font-mono text-gray-600 tracking-[0.1em] uppercase mt-1.5">
+            <span>0</span>
+            <span className="text-gray-400">{session.readings.length} of {totalItems}</span>
+            <span>{totalItems}</span>
+          </div>
         </div>
       </div>
 
@@ -253,14 +301,14 @@ export function WeighingStation({
             <button
               onClick={handleManualRecord}
               disabled={!currentReading || autoMode}
-              className="flex-1 py-3 bg-cyan-600 hover:bg-cyan-500 disabled:bg-base-800 disabled:text-gray-600 disabled:border-base-700 text-white font-medium rounded-lg transition-colors border border-cyan-500/30 disabled:border-base-700"
+              className="flex-1 py-3 bg-cyan-500 hover:bg-cyan-400 disabled:bg-base-800 disabled:text-gray-600 disabled:border-base-700 text-base-950 font-semibold rounded-xl transition-colors border border-cyan-400/40"
             >
               Record Weight
-              <span className="text-cyan-200/50 text-xs ml-2">Enter</span>
+              <span className="text-base-950/50 text-xs ml-2 font-mono">Enter</span>
             </button>
             <button
               onClick={() => setAutoMode(prev => !prev)}
-              className={`px-5 py-3 rounded-lg font-medium transition-colors border text-sm ${
+              className={`px-5 py-3 rounded-xl font-medium transition-colors border text-sm ${
                 autoMode
                   ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-400'
                   : 'bg-base-800 hover:bg-base-700 border-base-600 text-gray-400'
@@ -273,7 +321,7 @@ export function WeighingStation({
         <button
           onClick={handleUndoLast}
           disabled={session.readings.length === 0}
-          className="px-4 py-3 bg-base-800 hover:bg-base-700 disabled:bg-base-900 disabled:text-gray-700 disabled:border-base-800 text-gray-400 rounded-lg transition-colors border border-base-600 disabled:border-base-800 text-sm"
+          className="px-4 py-3 bg-base-800 hover:bg-base-700 disabled:bg-base-900 disabled:text-gray-700 disabled:border-base-800 text-gray-400 rounded-xl transition-colors border border-base-600 disabled:border-base-800 text-sm"
         >
           Undo <span className="text-gray-600 text-xs ml-1">Z</span>
         </button>

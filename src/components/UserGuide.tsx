@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
+import { useInstallPrompt } from '../hooks/useInstallPrompt';
 
 interface UserGuideProps {
   open: boolean;
   onClose: () => void;
 }
 
-type Section = 'overview' | 'connect' | 'dry' | 'wet' | 'scanner' | 'shortcuts' | 'troubleshoot';
+type Section = 'overview' | 'install' | 'connect' | 'dry' | 'wet' | 'scanner' | 'shortcuts' | 'troubleshoot';
 
 export function UserGuide({ open, onClose }: UserGuideProps) {
   const [section, setSection] = useState<Section>('overview');
+  const install = useInstallPrompt();
+  const [installStatus, setInstallStatus] = useState<'idle' | 'pending' | 'accepted' | 'dismissed' | 'unavailable'>('idle');
 
   // Close on Escape
   useEffect(() => {
@@ -24,6 +27,7 @@ export function UserGuide({ open, onClose }: UserGuideProps) {
 
   const nav: { id: Section; label: string }[] = [
     { id: 'overview', label: 'Overview' },
+    { id: 'install', label: 'Install App' },
     { id: 'connect', label: 'Connect Scale' },
     { id: 'dry', label: 'Dry Weight' },
     { id: 'wet', label: 'Wet Weight' },
@@ -31,6 +35,19 @@ export function UserGuide({ open, onClose }: UserGuideProps) {
     { id: 'shortcuts', label: 'Shortcuts' },
     { id: 'troubleshoot', label: 'Troubleshoot' },
   ];
+
+  const platformLabel = install.platform === 'macos' ? 'macOS'
+    : install.platform === 'windows' ? 'Windows'
+    : install.platform === 'ios' ? 'iOS'
+    : install.platform === 'android' ? 'Android'
+    : install.platform === 'linux' ? 'Linux'
+    : 'Desktop';
+
+  const handleInstall = async () => {
+    setInstallStatus('pending');
+    const result = await install.install();
+    setInstallStatus(result);
+  };
 
   return (
     <div
@@ -89,6 +106,79 @@ export function UserGuide({ open, onClose }: UserGuideProps) {
                 <p>Both export to styled Excel. Sessions auto-save every state change — survive tab refresh or crash.</p>
                 <div className="bg-base-800/50 border border-base-700 rounded-lg p-3 mt-4">
                   <p className="text-xs text-gray-500"><span className="text-gray-300 font-medium">Tip:</span> Demo Mode lets you test the full app without hardware. Simulated scale readings included.</p>
+                </div>
+
+                {!install.installed && (
+                  <button
+                    onClick={() => setSection('install')}
+                    className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-cyan-500/10 hover:bg-cyan-500/15 border border-cyan-500/30 rounded-xl transition-colors"
+                  >
+                    <div className="text-left">
+                      <p className="text-sm font-semibold text-cyan-300">Install ScaleSync on your desktop</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">One-click launch, runs as its own window. {platformLabel} detected.</p>
+                    </div>
+                    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" className="text-cyan-400">
+                      <path d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                )}
+              </>
+            )}
+
+            {section === 'install' && (
+              <>
+                <h3 className="text-lg font-semibold text-gray-100">Install ScaleSync</h3>
+                <p>Pin ScaleSync to your desktop / Start Menu as a proper app. Launches in its own window, no browser chrome.</p>
+
+                <div className="bg-base-800/60 border border-base-700 rounded-xl p-4 mt-4">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                      <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-gray-500">Detected</p>
+                      <p className="text-[15px] font-semibold text-gray-100 mt-0.5">{platformLabel}</p>
+                    </div>
+                    {install.installed ? (
+                      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-500/15 border border-green-500/30 text-green-300 text-xs font-semibold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                        Already installed
+                      </div>
+                    ) : install.canInstall ? (
+                      <button
+                        onClick={handleInstall}
+                        disabled={installStatus === 'pending'}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-60 text-base-950 font-semibold text-sm transition-colors"
+                      >
+                        <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 3v12m0 0l-4-4m4 4l4-4 M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+                        </svg>
+                        {installStatus === 'pending' ? 'Opening install…' : 'Install to desktop'}
+                      </button>
+                    ) : (
+                      <div className="text-[11px] text-gray-500 max-w-[280px] text-right">
+                        Your browser didn't expose a one-click install. Follow the steps below.
+                      </div>
+                    )}
+                  </div>
+
+                  {installStatus === 'accepted' && (
+                    <p className="text-xs text-green-400 mt-3">Installed! Look for ScaleSync on your desktop / Start Menu.</p>
+                  )}
+                  {installStatus === 'dismissed' && (
+                    <p className="text-xs text-amber-400 mt-3">Install cancelled. You can try again any time.</p>
+                  )}
+                  {installStatus === 'unavailable' && (
+                    <p className="text-xs text-amber-400 mt-3">Install prompt unavailable — use the manual steps below.</p>
+                  )}
+                </div>
+
+                <div className="mt-4 bg-base-800/40 border border-base-700 rounded-xl p-4">
+                  <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-gray-500 mb-2">Manual steps</p>
+                  <p className="text-sm text-gray-300">{install.instructions}</p>
+                </div>
+
+                <div className="mt-4 text-xs text-gray-500 space-y-1.5">
+                  <p><span className="text-gray-300 font-medium">What you get:</span> ScaleSync in your app switcher, taskbar / Dock pin, dedicated window (no tabs), works offline once loaded.</p>
+                  <p><span className="text-gray-300 font-medium">Safari on macOS:</span> only File → Add to Dock works. For the one-click install button, use Chrome or Edge.</p>
+                  <p><span className="text-gray-300 font-medium">Firefox:</span> doesn't support PWA install. Use Chrome, Edge, or Safari (macOS).</p>
                 </div>
               </>
             )}
